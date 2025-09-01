@@ -1,0 +1,5 @@
+[transforms.route]
+type = "route"
+inputs = [ "vector_aggregator" ]
+reroute_unmatched = true
+route.nginx = '.kubernetes.pod_labels."vector.dev/parser" == "nginx"'

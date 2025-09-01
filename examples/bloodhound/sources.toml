@@ -1,0 +1,31 @@
+# NOTE: This requires custom header generation, which is not supported yet in the official version of Vector
+
+[sources.bloodhound_attack_paths]
+type = "http_client"
+endpoint = "https://${BHE_DOMAIN}/api/v2/attack-paths/details"
+method = "GET"
+scrape_interval_secs = 10
+
+
+[[sources.bloodhound_attack_paths.headers.RequestDate]]
+value = '''
+format_timestamp!(now(), "%Y-%m-%dT%H:%M:%SZ")
+'''
+type = "vrl"
+
+[[sources.bloodhound_attack_paths.headers.Signature]]
+value = '''
+hmacStage1 = hmac("GET/api/v2/attack-paths/details", "${BHE_API_KEY}")
+signedDate = format_timestamp!(now(), "%Y-%m-%dT%H:%M:%SZ")
+signedDateSlice = slice!(signedDate, start: 0, end: 13)
+hmacStage2 = hmac(signedDateSlice, hmacStage1)
+hmacStage3 = hmac("", hmacStage2)
+encode_base64(hmacStage3)
+'''
+type = "vrl"
+
+[[sources.bloodhound_attack_paths.headers.Authorization]]
+value = "bhesignature ${BHE_API_ID}"
+
+[[sources.bloodhound_attack_paths.headers.Content-Type]]
+value = "application/json"

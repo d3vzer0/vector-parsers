@@ -1,0 +1,81 @@
+[transforms.nginx_ingress_parser]
+type = "remap"
+inputs = ["route.nginx"]
+source = '''
+.message = string!(.message)
+parse_http, parse_error = parse_regex(.message, r'^(?P<remote_addr>\S+) - (?P<remote_user>\S+) \[(?P<time_local>[^\]]*)\] "(?P<request>[^"]*)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)" (?P<request_length>\d+) (?P<request_time>\d+\.?\d*) \[(?P<proxy_upstream_name>[^\]]*)\] \[(?P<proxy_alternative_upstream_name>[^\]]*)\] (?P<upstream_addr>\S+) (?P<upstream_response_length>\d+) (?P<upstream_response_time>\d+\.?\d*) (?P<upstream_status>\d+) (?P<req_id>\S+)$')
+if parse_error == null {
+  .http = parse_http
+  .http.request = parse_regex!(.http.request, r'(?<method>[A-Z]+) (?<path>[^\s]+) (?<protocol>HTTP/[\d\.]+)')
+} else {
+  .parse_error = "Unabled to parse ingress log using parse_regex"
+}
+.data_stream.type = "logs"
+.data_stream.dataset = "kubernetes"
+.data_stream.namespace = "nginx"
+'''
+
+[[tests]]
+name = "Testing parsing of nginx ingress logs"
+
+[[tests.inputs]]
+insert_at = "route"
+type = "log"
+
+[tests.inputs.log_fields]
+message = '5.132.119.211 - - [02/May/2025:12:56:10 +0000] "GET /api/v1/challenges/13 HTTP/2.0" 200 6184 "https://mydomain.exampple.org/path" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:137.0) Gecko/20100101 Firefox/137.0" 112 0.092 [service-ctfd-8000] [] 10.233.64.23:8000 6184 0.092 200 fbc65443aa9a63ecc1ac6c2bfb8a1377'
+source_type = "kubernetes_logs"
+kubernetes = {"pod_labels" = { "vector.dev/parser" = "ingress-nginx"} }
+
+[[tests.outputs]]
+extract_from = "nginx_ingress_parser"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(is_string(.http.remote_addr))
+assert!(is_string(.http.request.method))
+assert!(is_string(.http.request.path))
+assert!(is_string(.http.upstream_status))
+'''
+
+
+[[tests]]
+name = "Testing parsing of unmatched"
+
+[[tests.inputs]]
+insert_at = "route"
+type = "log"
+
+[tests.inputs.log_fields]
+message = 'abc'
+source_type = "kubernetes_logs"
+kubernetes = {"pod_labels" = { "vector.dev/parser" = "ingress-nginx"} }
+
+[[tests.outputs]]
+extract_from = "nginx_ingress_parser"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(is_string(.parse_error))
+'''
+
+[[tests]]
+name = "Testing parsing of unmatched"
+
+[[tests.inputs]]
+insert_at = "route"
+type = "log"
+
+[tests.inputs.log_fields]
+message = 'abc'
+
+[[tests.outputs]]
+extract_from = "route._unmatched"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(is_string(.message))
+'''

@@ -1,0 +1,145 @@
+[transforms.ctfd_parser_auth]
+type = "remap"
+inputs = ["route_ctfd.auth"]
+source = '''
+.ctfd.event = "auth"
+parse_auth, parse_error = parse_groks(
+  .message,
+  patterns: [
+    "\\[%{DATA}\\] %{IP} - submitted invalid password for %{WORD:username}",
+    "\\[%{DATA}\\] %{IP} - %{WORD:username} logged in",
+  ]
+)
+
+if parse_error == null {
+  .ctfd.username = parse_auth.username
+  message = string!(.message)
+  if contains(message, "invalid") {
+    .ctfd.result = "failed"
+  } else {
+    .ctfd.result = "success"
+  }
+} else {
+  .parse_error = "Unabled to parse ctfd log using parse_regex"
+}
+'''
+
+[transforms.ctfd_parser_flag]
+type = "remap"
+inputs = ["route_ctfd.flags"]
+source = '''
+parse_submit, parse_error = parse_regex(.message, r'\[(?P<datetime>\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2})\] (?P<username>\w+) submitted b\'(?P<submission>[^\']+)\' on (?P<challenge>\d+) with kpm (?P<kpm>\d+) \[(?P<result>WRONG|CORRECT)\]')
+if parse_error == null {
+  .ctfd = parse_submit
+  .ctfd.result = string!(.ctfd.result)
+  .ctfd.result = downcase(.ctfd.result)
+} else {
+  .parse_error = "Unabled to parse ctfd log using parse_regex"
+}
+.ctfd.event = "flags"
+'''
+
+[transforms.ctfd_parser_post]
+type = "remap"
+inputs = ["ctfd_parser_flag", "ctfd_parser_auth", "route_ctfd._unmatched"]
+source = '''
+.data_stream.type = "logs"
+.data_stream.dataset = "kubernetes"
+.data_stream.namespace = "ctfd"
+'''
+
+
+[[tests]]
+name = "Testing ctfd logged in"
+
+[[tests.inputs]]
+insert_at = "route"
+type = "log"
+
+[tests.inputs.log_fields]
+message = '[05/06/2025 21:03:03] 95.96.73.99 - testuser1 logged in'
+source_type = "kubernetes_logs"
+kubernetes = {"pod_labels" = { "vector.dev/parser" = "ctfd"} }
+
+[[tests.outputs]]
+extract_from = "ctfd_parser_post"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(.ctfd.username == "testuser1")
+assert!(.ctfd.result == "success")
+'''
+
+[[tests]]
+name = "Testing incorrect pass"
+
+[[tests.inputs]]
+insert_at = "route"
+type = "log"
+
+[tests.inputs.log_fields]
+message = '[05/06/2025 21:05:20] 95.96.73.99 - submitted invalid password for testuser1'
+source_type = "kubernetes_logs"
+kubernetes = {"pod_labels" = { "vector.dev/parser" = "ctfd"} }
+
+[[tests.outputs]]
+extract_from = "ctfd_parser_post"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(.ctfd.username == "testuser1")
+assert!(.ctfd.result == "failed")
+'''
+
+[[tests]]
+name = "Testing ctfd correct flag"
+
+[[tests.inputs]]
+insert_at = "route"
+type = "log"
+
+[tests.inputs.log_fields]
+message = "[05/06/2025 21:08:41] testuser1 submitted b'rightflag' on 12 with kpm 1 [CORRECT]"
+source_type = "kubernetes_logs"
+kubernetes = {"pod_labels" = { "vector.dev/parser" = "ctfd"} }
+
+[[tests.outputs]]
+extract_from = "ctfd_parser_post"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(.ctfd.event == "flags")
+assert!(.ctfd.username == "testuser1")
+assert!(.ctfd.submission == "rightflag")
+assert!(.ctfd.challenge == "12")
+assert!(.ctfd.result == "correct")
+'''
+
+
+[[tests]]
+name = "Testing ctfd incorrect flag"
+
+[[tests.inputs]]
+insert_at = "route"
+type = "log"
+
+[tests.inputs.log_fields]
+message = "[05/06/2025 21:08:58] testuser1 submitted b'wrongflag' on 15 with kpm 1 [WRONG]"
+source_type = "kubernetes_logs"
+kubernetes = {"pod_labels" = { "vector.dev/parser" = "ctfd"} }
+
+[[tests.outputs]]
+extract_from = "ctfd_parser_post"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(.ctfd.event == "flags")
+assert!(.ctfd.username == "testuser1")
+assert!(.ctfd.submission == "wrongflag")
+assert!(.ctfd.challenge == "15")
+assert!(.ctfd.result == "wrong")
+'''

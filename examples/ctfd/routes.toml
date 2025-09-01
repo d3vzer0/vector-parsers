@@ -1,0 +1,17 @@
+[transforms.route]
+type = "route"
+inputs = [ "vector_aggregator" ]
+reroute_unmatched = true
+route.ctfd = '.kubernetes.pod_labels."vector.dev/parser" == "ctfd"'
+
+[transforms.route_ctfd]
+type = "route"
+inputs = [ "route.ctfd" ]
+route.auth = '''
+message = string!(.message)
+contains(message, "invalid password") || contains(message, "logged in")
+'''
+route.flags = '''
+message = string!(.message)
+ends_with(message, "[WRONG]") || ends_with(message, "[CORRECT]")
+'''
