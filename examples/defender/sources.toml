@@ -1,0 +1,12 @@
+[sources.sc_defender_xdr]
+type = "kafka"
+bootstrap_servers = "${EVENT_HUB_SERVERS}"
+group_id = "vector"
+topics = ["defenderxdr"]
+sasl.enabled = true
+sasl.mechanism = "PLAIN"
+sasl.username = "$$ConnectionString"
+sasl.password = "${EVENT_HUB_CONN_STRING}"
+tls.enabled = true
+tls.verify_certificate = true
+decoding.codec = "json"

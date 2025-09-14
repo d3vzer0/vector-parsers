@@ -1,0 +1,4 @@
+[sources.sc_fluentbit_winevtlog]
+type = "fluent"
+address = "0.0.0.0:9000"
+mode = "tcp"

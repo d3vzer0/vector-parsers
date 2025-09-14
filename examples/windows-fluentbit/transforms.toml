@@ -1,0 +1,17 @@
+[transforms.tf_fluentbit_winevtlog]
+type = "remap"
+inputs = ["sc_fluentbit_winevtlog"]
+source = '''
+if (.Message != null) {
+  lines = split!(.Message, r'\n')
+  .description = lines[0]
+
+  properties = parse_regex_all!(.Message, r'(?m)^(?P<category>[^\r\n]+):\r\n(?P<properties>(?:\t[^\r\n]+\r\n)+)')
+  for_each(properties) -> |_index, match| {
+    prop_values = parse_regex_all!(match.properties, r'\t(?P<key>[^\t]+):\t+(?P<value>[^\r\n]+)')
+    for_each(prop_values) -> |_index, prop| {
+      . = set!(., [match.category, prop.key], prop.value)
+    }
+  }
+}
+'''
