@@ -1,0 +1,32 @@
+
+[transforms.dedupe_fluentbit_evtlog_edges_admin_to]
+type = "dedupe"
+inputs = ["tf_fluentbit_evtlog_routing.admin_to"]
+fields.match = ["NewLogonAccountName", "SubjectAccountName"]
+
+
+[transforms.graph_fluentbit_evtlog_edges_admin_to]
+type = "remap"
+inputs = ["dedupe_fluentbit_evtlog_edges_admin_to"]
+source = '''
+NewLogonAccountName = to_string!(.NewLogonAccountName)
+NewLogonAccountDomain = to_string!(.NewLogonAccountDomain)
+SubjectAccountName = to_string!(.SubjectAccountName)
+SubjectAccountDomain = to_string!(.SubjectAccountDomain)
+
+. = {
+  "kind": "AdminTo", 
+  "start": {
+    "value": "{{ SubjectAccountName }}@{{ SubjectAccountDomain }}",
+    "match_by": "name"
+  },
+  "end": {
+    "value": "{{ NewLogonAccountName }}@{{ NewLogonAccountDomain }}",
+    "match_by": "name",
+  },
+  "properties": {
+    "isacl": false,
+    "description": "This edge was created based on an elevated logon event. The principal may either be a direct member of local Administrators, or through one or more group memberships."
+  }
+}
+'''

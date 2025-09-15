@@ -1,0 +1,34 @@
+
+[transforms.dedupe_fluentbit_evtlog_edges_has_session]
+type = "dedupe"
+inputs = ["tf_fluentbit_evtlog_routing.has_session"]
+fields.match = ["NewLogonAccountName", "SubjectAccountName"]
+
+
+[transforms.graph_fluentbit_evtlog_edges_has_session]
+type = "remap"
+inputs = ["dedupe_fluentbit_evtlog_edges_has_session"]
+source = '''
+NewLogonAccountName = to_string!(.NewLogonAccountName)
+NewLogonAccountDomain = to_string!(.NewLogonAccountDomain)
+SubjectAccountName = to_string!(.SubjectAccountName)
+SubjectAccountDomain = to_string!(.SubjectAccountDomain)
+
+logon_type = get_enrichment_table_record("logon_types", {"id" : .LogonInformationLogonType}) ?? .LogonInformationLogonType
+
+. = {
+  "kind": "HasSession", 
+  "start": {
+    "value": "{{ NewLogonAccountName }}@{{ NewLogonAccountDomain }}",
+    "match_by": "name"
+  },
+  "end": {
+    "value": "{{ SubjectAccountName }}@{{ SubjectAccountDomain }}",
+    "match_by": "name",
+  },
+  "properties": {
+    "isacl": false,
+    "LogonType": logon_type.name
+  }
+}
+'''

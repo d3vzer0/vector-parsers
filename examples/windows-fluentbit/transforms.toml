@@ -10,14 +10,33 @@ if (.Message != null) {
   for_each(properties) -> |_index, match| {
     prop_values = parse_regex_all!(match.properties, r'\t(?P<key>[^\t]+):\t+(?P<value>[^\r\n]+)')
     for_each(prop_values) -> |_index, prop| {
-      . = set!(., [match.category, prop.key], prop.value)
+      joinedKey = replace!(prop.key, " ", "")
+      category = replace!(match.category, " ", "")
+      . = set!(., ["{{ category }}{{ joinedKey }}"], prop.value)
     }
   }
 }
 '''
 
+[transforms.tf_fluentbit_evtlog_filter]
+type = "filter"
+inputs = ["tf_fluentbit_winevtlog"]
+condition = '''
+id_scope = [4624]
+includes(id_scope, .EventID)
+'''
+
+[transforms.tf_fluentbit_evtlog_routing]
+type = "route"
+inputs = ["tf_fluentbit_evtlog_filter"]
+reroute_unmatched = true
+route.admin_to = '.EventID == 4624 && .LogonInformationElevatedToken == "Yes"'
+route.has_session = '.EventID == 4624'
+
+
+
 [[tests]]
-name = "Testing parsing of Windows Event log via FluentBit"
+name = "Testing parsing of Windows Event log 4624, logon type 5, via FluentBit"
 
 [[tests.inputs]]
 insert_at = "tf_fluentbit_winevtlog"
@@ -27,20 +46,20 @@ type = "log"
 ActivityID = ""
 Channel = "Security"
 Computer = "kingslanding.sevenkingdoms.local"
-EventID = "4634"
-EventRecordID = "80455"
+EventID = 4624
+EventRecordID = 80455
 Keywords = "0x8020000000000000"
-Level = "0"
-Message = "An account was logged off.\r\n\r\nSubject:\r\n\tSecurity ID:\t\tS-1-5-21-1267327980-1800640824-2189074639-1001\r\n\tAccount Name:\t\tWINTERFELL$\r\n\tAccount Domain:\t\tNORTH\r\n\tLogon ID:\t\t0x7F7F1C8\r\n\r\n\tLogon Type:\t\t3\r\n\r\nThis event is generated when a logon session is destroyed. It may be positively correlated with a logon event using the Logon ID value. Logon IDs are only unique between reboots on the same computer."
-Opcode = "0"
-ProcessID = "592"
+Level = 0
+Message = "An account was successfully logged on.\r\n\r\nSubject:\r\n\tSecurity ID:\t\tS-1-5-18\r\n\tAccount Name:\t\tKINGSLANDING$\r\n\tAccount Domain:\t\tSEVENKINGDOMS\r\n\tLogon ID:\t\t0x3E7\r\n\r\nLogon Information:\r\n\tLogon Type:\t\t5\r\n\tRestricted Admin Mode:\t-\r\n\tVirtual Account:\t\tNo\r\n\tElevated Token:\t\tYes\r\n\r\nImpersonation Level:\t\tImpersonation\r\n\r\nNew Logon:\r\n\tSecurity ID:\t\tS-1-5-18\r\n\tAccount Name:\t\tSYSTEM\r\n\tAccount Domain:\t\tNT AUTHORITY\r\n\tLogon ID:\t\t0x3E7\r\n\tLinked Logon ID:\t\t0x0\r\n\tNetwork Account Name:\t-\r\n\tNetwork Account Domain:\t-\r\n\tLogon GUID:\t\t{00000000-0000-0000-0000-000000000000}\r\n\r\nProcess Information:\r\n\tProcess ID:\t\t0x234\r\n\tProcess Name:\t\tC:\\Windows\\System32\\services.exe\r\n\r\nNetwork Information:\r\n\tWorkstation Name:\t-\r\n\tSource Network Address:\t-\r\n\tSource Port:\t\t-\r\n\r\nDetailed Authentication Information:\r\n\tLogon Process:\t\tAdvapi  \r\n\tAuthentication Package:\tNegotiate\r\n\tTransited Services:\t-\r\n\tPackage Name (NTLM only):\t-\r\n\tKey Length:\t\t0\r\n\r\nThis event is generated when a logon session is created. It is generated on the computer that was accessed.\r\n\r\nThe subject fields indicate the account on the local system which requested the logon. This is most commonly a service such as the Server service, or a local process such as Winlogon.exe or Services.exe.\r\n\r\nThe logon type field indicates the kind of logon that occurred. The most common types are 2 (interactive) and 3 (network).\r\n\r\nThe New Logon fields indicate the account for whom the new logon was created, i.e. the account that was logged on.\r\n\r\nThe network fields indicate where a remote logon request originated. Workstation name is not always available and may be left blank in some cases.\r\n\r\nThe impersonation level field indicates the extent to which a process in the logon session can impersonate.\r\n\r\nThe authentication information fields provide detailed information about this specific logon request.\r\n\t- Logon GUID is a unique identifier that can be used to correlate this event with a KDC event.\r\n\t- Transited services indicate which intermediate services have participated in this logon request.\r\n\t- Package name indicates which sub-protocol was used among the NTLM protocols.\r\n\t- Key length indicates the length of the generated session key. This will be 0 if no session key was requested."
+Opcode = 0
+ProcessID = 592
 ProviderGuid = "{54849625-5478-4994-A5BA-3E3B0328C30D}"
 ProviderName = "Microsoft-Windows-Security-Auditing"
 Qualifiers = ""
 RelatedActivityID = ""
 StringInserts = "['S-1-5-21-1267327980-1800640824-2189074639-1001', 'WINTERFELL$', 'NORTH', '0x7f7f1c8', 3]"
-Task = "12545"
-ThreadID = "7044"
+Task = 12545
+ThreadID = 7044
 TimeCreated = "2025-09-14 18:05:08 -0400"
 UserID = ""
 Version = "0"
@@ -50,17 +69,85 @@ tag = "winevtlog.0"
 timestamp = "2025-09-14T22:05:10.044136700Z"
 
 [[tests.outputs]]
-extract_from = "tf_fluentbit_winevtlog"
+extract_from = "tf_fluentbit_evtlog_filter"
 
 [[tests.outputs.conditions]]
 type = "vrl"
 source = '''
 assert!(is_string(.description))
-assert!(.description == "An account was logged off.", "Description not parsed from Message field content")
-assert!(exists(.Subject), "Subject not parsed from Message field content")
-assert!(.Subject."Security ID" == "S-1-5-21-1267327980-1800640824-2189074639-1001", "Subject Security ID not parsed from Message field content")
-assert!(.Subject."Account Name" == "WINTERFELL$", "Subject Account Name not parsed from Message field content")
-assert!(.Subject."Account Domain" == "NORTH", "Subject Acount Domain not parsed from Message field content")
+assert!(.description == "An account was successfully logged on.", "Description not parsed from Message field content")
+assert!(.SubjectSecurityID == "S-1-5-18", "Subject Security ID not parsed from Message field content")
+assert!(.SubjectAccountName == "KINGSLANDING$", "Subject Account Name not parsed from Message field content")
+assert!(.SubjectAccountDomain == "SEVENKINGDOMS", "Subject Acount Domain not parsed from Message field content")
+assert!(.LogonInformationLogonType == "5", "Subject Acount Domain not parsed from Message field content")
+'''
+
+[[tests.outputs]]
+extract_from = "graph_fluentbit_evtlog_edges_admin_to"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(.start.value == "KINGSLANDING$@SEVENKINGDOMS", "Transform failed, start edge incorrect")
+assert!(.end.value == "SYSTEM@NT AUTHORITY", "Transform failed, end edge incorrect")
 '''
 
 
+[[tests]]
+name = "Testing parsing of Windows Event log 4624, logon type 3, via FluentBit"
+
+[[tests.inputs]]
+insert_at = "tf_fluentbit_winevtlog"
+type = "log"
+
+[tests.inputs.log_fields]
+ActivityID = ""
+Channel = "Security"
+Computer = "GOADa375be-DC01"
+EventID = 4624
+EventRecordID = 80455
+Keywords = "0x8020000000000000"
+Level = 0
+Message = "An account was successfully logged on.\r\n\r\nSubject:\r\n\tSecurity ID:\t\tS-1-5-20\r\n\tAccount Name:\t\tGOADA375BE-DC01$\r\n\tAccount Domain:\t\tWORKGROUP\r\n\tLogon ID:\t\t0x3E4\r\n\r\nLogon Information:\r\n\tLogon Type:\t\t3\r\n\tRestricted Admin Mode:\t-\r\n\tVirtual Account:\t\tNo\r\n\tElevated Token:\t\tYes\r\n\r\nImpersonation Level:\t\tImpersonation\r\n\r\nNew Logon:\r\n\tSecurity ID:\t\tS-1-5-21-3781938893-1413085735-1246734862-1000\r\n\tAccount Name:\t\tlocaluser\r\n\tAccount Domain:\t\tGOADA375BE-DC01\r\n\tLogon ID:\t\t0x2532BC\r\n\tLinked Logon ID:\t\t0x0\r\n\tNetwork Account Name:\t-\r\n\tNetwork Account Domain:\t-\r\n\tLogon GUID:\t\t{00000000-0000-0000-0000-000000000000}\r\n\r\nProcess Information:\r\n\tProcess ID:\t\t0xa00\r\n\tProcess Name:\t\tC:\\Windows\\System32\\svchost.exe\r\n\r\nNetwork Information:\r\n\tWorkstation Name:\tGOADA375BE-DC01\r\n\tSource Network Address:\t::1\r\n\tSource Port:\t\t49733\r\n\r\nDetailed Authentication Information:\r\n\tLogon Process:\t\tAdvapi  \r\n\tAuthentication Package:\tNegotiate\r\n\tTransited Services:\t-\r\n\tPackage Name (NTLM only):\t-\r\n\tKey Length:\t\t0\r\n\r\nThis event is generated when a logon session is created. It is generated on the computer that was accessed.\r\n\r\nThe subject fields indicate the account on the local system which requested the logon. This is most commonly a service such as the Server service, or a local process such as Winlogon.exe or Services.exe.\r\n\r\nThe logon type field indicates the kind of logon that occurred. The most common types are 2 (interactive) and 3 (network).\r\n\r\nThe New Logon fields indicate the account for whom the new logon was created, i.e. the account that was logged on.\r\n\r\nThe network fields indicate where a remote logon request originated. Workstation name is not always available and may be left blank in some cases.\r\n\r\nThe impersonation level field indicates the extent to which a process in the logon session can impersonate.\r\n\r\nThe authentication information fields provide detailed information about this specific logon request.\r\n\t- Logon GUID is a unique identifier that can be used to correlate this event with a KDC event.\r\n\t- Transited services indicate which intermediate services have participated in this logon request.\r\n\t- Package name indicates which sub-protocol was used among the NTLM protocols.\r\n\t- Key length indicates the length of the generated session key. This will be 0 if no session key was requested."
+Opcode = 0
+ProcessID = 592
+ProviderGuid = "{54849625-5478-4994-A5BA-3E3B0328C30D}"
+ProviderName = "Microsoft-Windows-Security-Auditing"
+Qualifiers = ""
+RelatedActivityID = ""
+StringInserts = "['S-1-5-21-1267327980-1800640824-2189074639-1001', 'WINTERFELL$', 'NORTH', '0x7f7f1c8', 3]"
+Task = 12545
+ThreadID = 7044
+TimeCreated = "2025-09-14 18:05:08 -0400"
+UserID = ""
+Version = "0"
+host = "10.3.10.10"
+source_type = "fluent"
+tag = "winevtlog.0"
+timestamp = "2025-09-14T22:05:10.044136700Z"
+
+[[tests.outputs]]
+extract_from = "tf_fluentbit_evtlog_filter"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(is_string(.description))
+assert!(.description == "An account was successfully logged on.", "Description not parsed from Message field content")
+assert!(.SubjectAccountName == "GOADA375BE-DC01$", "Subject Account Name not parsed from Message field content")
+assert!(.SubjectAccountDomain == "WORKGROUP", "Subject Acount Domain not parsed from Message field content")
+assert!(.NewLogonAccountName == "localuser", "Subject Account Name not parsed from Message field content")
+assert!(.NewLogonAccountDomain == "GOADA375BE-DC01", "Subject Acount Domain not parsed from Message field content")
+assert!(.LogonInformationLogonType == "3", "Subject Acount Domain not parsed from Message field content")
+'''
+
+[[tests.outputs]]
+extract_from = "graph_fluentbit_evtlog_edges_has_session"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = '''
+assert!(.start.value == "localuser@GOADA375BE-DC01", "Transform failed, start edge incorrect")
+assert!(.end.value == "GOADA375BE-DC01$@WORKGROUP", "Transform failed, end edge incorrect")
+assert!(.properties.LogonType == "Network", "Transform failed, incorrect logon type lookup")
+'''
