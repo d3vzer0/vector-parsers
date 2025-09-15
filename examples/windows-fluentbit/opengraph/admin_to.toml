@@ -15,18 +15,20 @@ SubjectAccountName = to_string!(.SubjectAccountName)
 SubjectAccountDomain = to_string!(.SubjectAccountDomain)
 
 . = {
-  "kind": "AdminTo", 
-  "start": {
-    "value": "{{ SubjectAccountName }}@{{ SubjectAccountDomain }}",
-    "match_by": "name"
-  },
-  "end": {
-    "value": "{{ NewLogonAccountName }}@{{ NewLogonAccountDomain }}",
-    "match_by": "name",
-  },
-  "properties": {
-    "isacl": false,
-    "description": "This edge was created based on an elevated logon event. The principal may either be a direct member of local Administrators, or through one or more group memberships."
+  "edge": {
+    "kind": "AdminTo", 
+    "start": {
+      "value": "{{ SubjectAccountName }}@{{ SubjectAccountDomain }}",
+      "match_by": "name"
+    },
+    "end": {
+      "value": "{{ NewLogonAccountName }}@{{ NewLogonAccountDomain }}",
+      "match_by": "name",
+    },
+    "properties": {
+      "isacl": false,
+      "description": "This edge was created based on an elevated logon event. The principal may either be a direct member of local Administrators, or through one or more group memberships."
+    }
   }
 }
 '''

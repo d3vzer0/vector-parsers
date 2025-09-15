@@ -1,0 +1,11 @@
+[transforms.bloodhound_buffer_events]
+type = "reduce"
+inputs = ["graph_fluentbit_evtlog_edges_has_session"]
+merge_strategies.edge = "array"
+merge_strategies.task_id = "discard"
+
+[transforms.bloodhound_buffer_events.ends_when]
+type = "vrl"
+source = '''
+.task_id == 1
+'''

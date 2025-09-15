@@ -17,18 +17,20 @@ SubjectAccountDomain = to_string!(.SubjectAccountDomain)
 logon_type = get_enrichment_table_record("logon_types", {"id" : .LogonInformationLogonType}) ?? .LogonInformationLogonType
 
 . = {
-  "kind": "HasSession", 
-  "start": {
-    "value": "{{ NewLogonAccountName }}@{{ NewLogonAccountDomain }}",
-    "match_by": "name"
-  },
-  "end": {
-    "value": "{{ SubjectAccountName }}@{{ SubjectAccountDomain }}",
-    "match_by": "name",
-  },
-  "properties": {
-    "isacl": false,
-    "LogonType": logon_type.name
+  "edge": {
+    "kind": "HasSession", 
+    "start": {
+      "value": "{{ NewLogonAccountName }}@{{ NewLogonAccountDomain }}",
+      "match_by": "name"
+    },
+    "end": {
+      "value": "{{ SubjectAccountName }}@{{ SubjectAccountDomain }}",
+      "match_by": "name",
+    },
+    "properties": {
+      "isacl": false,
+      "LogonType": logon_type.name
+    }
   }
 }
 '''
