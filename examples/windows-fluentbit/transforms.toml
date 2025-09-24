@@ -30,9 +30,10 @@ includes(id_scope, .EventID)
 type = "route"
 inputs = ["filter_fluentbit_evtlog"]
 reroute_unmatched = true
-route.admin_to = '.EventID == 4624 && .LogonInformationElevatedToken == "Yes"'
+route.admin_to = '.EventID == 4624 && .LogonInformationElevatedToken == "Yes" && includes(["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"], .LogonInformationLogonType)'
 route.has_session_1 = '.EventID == 4624 && includes(["2", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"], .LogonInformationLogonType)'
 route.has_session_2 = '.EventID == 4624 && .LogonInformationLogonType == "9"'
+route.can_rdp = '.EventID == 4624 && includes(["10", "12"], .LogonInformationLogonType)'
 
 
 
