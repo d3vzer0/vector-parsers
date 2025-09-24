@@ -1,6 +1,6 @@
 [transforms.bloodhound_buffer_events]
 type = "reduce"
-inputs = ["graph_fluentbit_evtlog_edges_has_session"]
+inputs = ["graph_fluentbit_evtlog_edges_*"]
 merge_strategies.edge = "array"
 merge_strategies.task_id = "discard"
 
