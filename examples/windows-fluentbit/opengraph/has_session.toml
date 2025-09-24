@@ -1,7 +1,7 @@
 
 [transforms.dedupe_fluentbit_evtlog_edges_has_session]
 type = "dedupe"
-inputs = ["tf_fluentbit_evtlog_routing.has_session"]
+inputs = ["route_fluentbit_evtlog.has_session"]
 fields.match = ["NewLogonAccountName", "SubjectAccountName"]
 
 
@@ -9,22 +9,20 @@ fields.match = ["NewLogonAccountName", "SubjectAccountName"]
 type = "remap"
 inputs = ["dedupe_fluentbit_evtlog_edges_has_session"]
 source = '''
-NewLogonAccountName = to_string!(.NewLogonAccountName)
-NewLogonAccountDomain = to_string!(.NewLogonAccountDomain)
-SubjectAccountName = to_string!(.SubjectAccountName)
-SubjectAccountDomain = to_string!(.SubjectAccountDomain)
+Computer = to_string!(.Computer)
+TargetUser = to_string!(.NewLogonSecurityID)
 
-logon_type = get_enrichment_table_record("logon_types", {"id" : .LogonInformationLogonType}) ?? .LogonInformationLogonType
+logon_type = get_enrichment_table_record("win_logon_types", {"id" : .LogonInformationLogonType}) ?? .LogonInformationLogonType
 
 . = {
   "edge": {
     "kind": "HasSession", 
     "start": {
-      "value": "{{ NewLogonAccountName }}@{{ NewLogonAccountDomain }}",
+      "value": "{{ Computer }}",
       "match_by": "name"
     },
     "end": {
-      "value": "{{ SubjectAccountName }}@{{ SubjectAccountDomain }}",
+      "value": "{{ TargetUser }}",
       "match_by": "name",
     },
     "properties": {
