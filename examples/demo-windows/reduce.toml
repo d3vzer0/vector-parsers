@@ -1,0 +1,59 @@
+[transforms.bloodhound_buffer_events]
+type = "reduce"
+inputs = ["graph_fluentbit_evtlog_edges_*", "bloodhound_start_upload_job"]
+merge_strategies.edge = "array"
+merge_strategies.task_id = "discard"
+
+[transforms.bloodhound_buffer_events.ends_when]
+type = "vrl"
+source = '''
+exists(.task_id)
+'''
+
+[transforms.bloodhound_transform_graph]
+type = "remap"
+inputs = ["bloodhound_buffer_events"]
+source = '''
+.message = {"graph": {"edges": .edge }}
+task_id = to_string!(.task_id)
+path = "POST/api/v2/file-upload/" + task_id
+
+hmacStage1 = hmac(path, "${BHE_API_KEY}")
+signedDate = format_timestamp!(now(), "%Y-%m-%dT%H:%M:%S%.f%:z", "local")
+signedDateSlice = slice!(signedDate, start: 0, end: 13)
+hmacStage2 = hmac(signedDateSlice, hmacStage1)
+hmacStage3 = hmac(encode_json(.message), hmacStage2)
+
+%bloodhound.task_id = .task_id
+%bloodhound.date = signedDate
+%bloodhound.signature = encode_base64(hmacStage3)
+%bloodhound.api_id = "${BHE_API_ID}"
+'''
+
+[transforms.bloodhound_filter_jobs]
+type = "filter"
+inputs = [ "bloodhound_get_jobs" ]
+condition.type = "vrl"
+condition.source = '''.total_files == 1 && .status == 1'''
+
+
+[transforms.stop_file_upload_transform]
+type = "remap"
+inputs = ["bloodhound_filter_jobs"]
+source = '''
+task_id = to_string!(.id)
+path = "POST/api/v2/file-upload/" + task_id + "/end"
+
+hmacStage1 = hmac(path, "${BHE_API_KEY}")
+signedDate = format_timestamp!(now(), "%Y-%m-%dT%H:%M:%S%.f%:z", "local")
+signedDateSlice = slice!(signedDate, start: 0, end: 13)
+hmacStage2 = hmac(signedDateSlice, hmacStage1)
+hmacStage3 = hmac("", hmacStage2)
+.message = ""
+
+%bloodhound.task_id = .id
+%bloodhound.date = signedDate
+%bloodhound.signature = encode_base64(hmacStage3)
+%bloodhound.api_id = "${BHE_API_ID}"
+'''
+

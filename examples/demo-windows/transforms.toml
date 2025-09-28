@@ -1,0 +1,36 @@
+[transforms.tf_fluentbit_winevtlog]
+type = "remap"
+inputs = ["sc_fluentbit_winevtlog"]
+source = '''
+if (.Message != null) {
+  lines = split!(.Message, r'\r\n')
+  .description = lines[0]
+
+  properties = parse_regex_all!(.Message, r'(?m)^(?P<category>[^\r\n]+):\r\n(?P<properties>(?:\t[^\r\n]+\r\n)+)')
+  for_each(properties) -> |_index, match| {
+    prop_values = parse_regex_all!(match.properties, r'\t(?P<key>[^\t]+):\t+(?P<value>[^\r\n]+)')
+    for_each(prop_values) -> |_index, prop| {
+      joinedKey = replace!(prop.key, " ", "")
+      category = replace!(match.category, " ", "")
+      . = set!(., ["{{ category }}{{ joinedKey }}"], prop.value)
+    }
+  }
+}
+'''
+
+[transforms.filter_fluentbit_evtlog]
+type = "filter"
+inputs = ["tf_fluentbit_winevtlog"]
+condition = '''
+id_scope = [4624]
+includes(id_scope, .EventID)
+'''
+
+[transforms.route_fluentbit_evtlog]
+type = "route"
+inputs = ["filter_fluentbit_evtlog"]
+reroute_unmatched = true
+route.admin_to = '.EventID == 4624 && .LogonInformationElevatedToken == "Yes" && includes(["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"], .LogonInformationLogonType)'
+route.has_session_1 = '.EventID == 4624 && includes(["2", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"], .LogonInformationLogonType)'
+route.has_session_2 = '.EventID == 4624 && .LogonInformationLogonType == "9"'
+route.can_rdp = '.EventID == 4624 && includes(["10", "12"], .LogonInformationLogonType)'

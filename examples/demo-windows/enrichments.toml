@@ -1,0 +1,10 @@
+[enrichment_tables.win_logon_types]
+type = "file"
+
+[enrichment_tables.win_logon_types.file]
+path = "examples/windows-fluentbit/enrichment/logontypes.csv"
+encoding.type = "csv"
+
+[enrichment_tables.win_logon_types.schema]
+id = "string"
+integer = "string"

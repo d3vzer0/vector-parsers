@@ -1,0 +1,48 @@
+# Print to console
+[sinks.si_console]
+inputs = ["bloodhound_transform_graph"]
+type = "console"
+encoding.codec = "json"
+
+# Send metrics to Prometheus remote write endpoint
+[sinks.si_prometheus_remote_write]
+type = "prometheus_remote_write"
+inputs = [ "sc_vector_internal_metrics" ]
+endpoint = "http://localhost:9090/api/v1/write"
+
+
+# # Sink to upload (OpenGraph) file
+[sinks.bloodhound_upload_file]
+type = "http"
+inputs = ["bloodhound_transform_graph"]
+uri = "${BHE_URI}/api/v2/file-upload/{{%bloodhound.task_id}}"
+method = "post"
+encoding.codec = "raw_message"
+batch.max_events = 1
+encoding.only_fields = ["message"]
+framing.method = "bytes"
+
+[sinks.bloodhound_upload_file.request.headers]
+Signature = "{{%bloodhound.signature}}"
+RequestDate = "{{%bloodhound.date}}"
+Authorization = "bhesignature ${BHE_API_ID}"
+Content-Type = "application/json"
+
+
+# Sink to stop job
+[sinks.bloodhound_end_upload_job]
+type = "http"
+inputs = ["stop_file_upload_transform"]
+uri = "${BHE_URI}/api/v2/file-upload/{{%bloodhound.task_id}}/end"
+method = "post"
+encoding.codec = "raw_message"
+encoding.only_fields = ["message"]
+batch.max_events = 1
+framing.method = "bytes"
+
+
+[sinks.bloodhound_end_upload_job.request.headers]
+Signature = "{{%bloodhound.signature}}"
+RequestDate = "{{%bloodhound.date}}"
+Authorization = "bhesignature ${BHE_API_ID}"
+Content-Type = "application/json"
