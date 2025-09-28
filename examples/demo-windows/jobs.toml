@@ -1,0 +1,95 @@
+
+# NOTE: This requires custom header generation, which is not supported yet in the official version of Vector
+[sources.bloodhound_start_upload_job]
+type = "http_client"
+endpoint = "${BHE_URI}/api/v2/file-upload/start"
+method = "POST"
+scrape_interval_secs = ${BHE_EXPORT_INTERVAL}
+decoding.codec = "vrl"
+
+[sources.bloodhound_start_upload_job.decoding.vrl]
+source = '''
+.message = parse_json!(.message)
+.task_id = .message.data.id
+'''
+
+[[sources.bloodhound_start_upload_job.headers.RequestDate]]
+value = '''
+format_timestamp!(now(), "%Y-%m-%dT%H:%M:%S%.f%:z", "local")
+'''
+type = "vrl"
+
+[[sources.bloodhound_start_upload_job.headers.Signature]]
+value = '''
+hmacStage1 = hmac("POST/api/v2/file-upload/start", "${BHE_API_KEY}")
+signedDate = format_timestamp!(now(), "%Y-%m-%dT%H:%M:%S%.f%:z", "local")
+signedDateSlice = slice!(signedDate, start: 0, end: 13)
+hmacStage2 = hmac(signedDateSlice, hmacStage1)
+hmacStage3 = hmac("", hmacStage2)
+encode_base64(hmacStage3)
+'''
+type = "vrl"
+
+[[sources.bloodhound_start_upload_job.headers.Authorization]]
+value = "bhesignature ${BHE_API_ID}"
+
+
+[sources.bloodhound_get_jobs]
+type = "http_client"
+endpoint = "${BHE_URI}/api/v2/file-upload?skip=0&limit=100&sort_by=-id"
+method = "GET"
+scrape_interval_secs = 10
+decoding.codec = "vrl"
+
+[sources.bloodhound_get_jobs.decoding.vrl]
+source = '''
+.message = parse_json!(.message)
+. = .message.data
+'''
+
+[[sources.bloodhound_get_jobs.headers.RequestDate]]
+value = '''
+format_timestamp!(now(), "%Y-%m-%dT%H:%M:%S%.f%:z", "local")
+'''
+type = "vrl"
+
+[[sources.bloodhound_get_jobs.headers.Signature]]
+value = '''
+hmacStage1 = hmac("GET/api/v2/file-upload?skip=0&limit=100&sort_by=-id", "${BHE_API_KEY}")
+signedDate = format_timestamp!(now(), "%Y-%m-%dT%H:%M:%S%.f%:z", "local")
+signedDateSlice = slice!(signedDate, start: 0, end: 13)
+hmacStage2 = hmac(signedDateSlice, hmacStage1)
+hmacStage3 = hmac("", hmacStage2)
+encode_base64(hmacStage3)
+'''
+type = "vrl"
+
+[[sources.bloodhound_get_jobs.headers.Authorization]]
+value = "bhesignature ${BHE_API_ID}"
+
+
+[transforms.bloodhound_filter_jobs]
+type = "filter"
+inputs = [ "bloodhound_get_jobs" ]
+condition.type = "vrl"
+condition.source = '''.total_files == 1 && .status == 1'''
+
+
+[transforms.stop_file_upload_transform]
+type = "remap"
+inputs = ["bloodhound_filter_jobs"]
+source = '''
+task_id = to_string!(.id)
+path = "POST/api/v2/file-upload/" + task_id + "/end"
+
+hmacStage1 = hmac(path, "${BHE_API_KEY}")
+signedDate = format_timestamp!(now(), "%Y-%m-%dT%H:%M:%S%.f%:z", "local")
+signedDateSlice = slice!(signedDate, start: 0, end: 13)
+hmacStage2 = hmac(signedDateSlice, hmacStage1)
+hmacStage3 = hmac("", hmacStage2)
+
+%bloodhound.task_id = .id
+%bloodhound.date = signedDate
+%bloodhound.signature = encode_base64(hmacStage3)
+%bloodhound.api_id = "${BHE_API_ID}"
+'''

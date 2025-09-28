@@ -18,7 +18,7 @@ Computer = upcase(to_string!(.Computer))
     "kind": "AdminTo", 
     "start": {
       "value": "{{ NewLogonSecurityID }}",
-      "match_by": "name"
+      "match_by": "id"
     },
     "end": {
       "value": "{{ Computer }}",

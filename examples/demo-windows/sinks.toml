@@ -2,7 +2,10 @@
 [sinks.si_console]
 inputs = ["bloodhound_transform_graph"]
 type = "console"
-encoding.codec = "json"
+# encoding.codec = "json"
+encoding.codec = "raw_message"
+encoding.only_fields = ["message"]
+framing.method = "bytes"
 
 # Send metrics to Prometheus remote write endpoint
 [sinks.si_prometheus_remote_write]

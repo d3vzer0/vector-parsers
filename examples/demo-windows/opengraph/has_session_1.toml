@@ -24,7 +24,7 @@ logon_type = get_enrichment_table_record("win_logon_types", {"id" : .LogonInform
     },
     "end": {
       "value": "{{ TargetUser }}",
-      "match_by": "name",
+      "match_by": "id",
     },
     "properties": {
       "isacl": false,
