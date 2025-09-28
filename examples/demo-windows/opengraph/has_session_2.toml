@@ -10,7 +10,7 @@ type = "remap"
 # inputs = ["dedupe_fluentbit_evtlog_edges_has_session_2"]
 inputs = ["route_fluentbit_evtlog.has_session_2"]
 source = '''
-Computer = to_string!(.Computer)
+Computer = upcase(to_string!(.Computer))
 TargetUser = upcase(to_string!(.NewLogonNetworkAccountName))
 TargetDomain = upcase(to_string!(.NewLogonNetworkAccountDomain))
 
@@ -24,7 +24,7 @@ logon_type = get_enrichment_table_record("win_logon_types", {"id" : .LogonInform
       "match_by": "name"
     },
     "end": {
-      "value": "{{ TargetUser }}@{{ TargetDomain }}",
+      "value": "{{ TargetUser }}@{{ TargetDomain }}.SEVENKINGDOMS.LOCAL",
       "match_by": "name",
     },
     "properties": {
